@@ -421,7 +421,8 @@ class fritzbox_api {
       }
       else
       {
-        $output = initSIDLUA();
+      	$output = $this->initSIDLUA();
+        //$output = initSIDLUA();
         if ($output != '0000000000000000')
         {
           return $output;
