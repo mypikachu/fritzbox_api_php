@@ -323,6 +323,62 @@ class fritzbox_api {
     * @access protected
     * @return string                a valid SID, if the login was successful, otherwise throws an Exception with an error message
     */
+    
+    // login_sid.lua
+    // Login mit Lua unterstützung bei aktuellem Firmware Versionen ab xx.05.2x Beta Labor
+    
+  protected function initSIDLUA()
+  {
+    // read the current status
+    // änderung nur für neue Firmware ab xx.05.2x mit Lua Login Beta Labor
+    $ch = curl_init($this->fritzbox_url . '/login_sid.lua');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    if ( $this->enable_remote_config )
+    {
+      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+      curl_setopt($ch, CURLOPT_USERPWD, $this->remote_config_user . ':' . $this->remote_config_password);
+    }
+    $output = curl_exec($ch);
+
+    $session_status_simplexml = simplexml_load_string($output);
+    
+    // perhaps we already have a SID (i.e. when no password is set)
+    if ($session_status_simplexml->SID != '0000000000000000')
+    {
+      return $session_status_simplexml->SID;
+    }
+    // we have to login and get a new SID
+    else
+    {
+      // the challenge-response magic, pay attention to the mb_convert_encoding()
+      $challenge = $session_status_simplexml->Challenge;
+      $response = $challenge . '-' . md5(mb_convert_encoding($challenge . '-' . $this->password, "UCS-2LE", "UTF-8"));
+      
+      // do the login
+      $formfields = array(
+        'page'                => '/login_sid.lua',
+        'response' => $response,
+      );
+      $output = $this->doPostForm($formfields);
+      
+      
+      // finger out the SID from the response
+      $session_status_simplexml = simplexml_load_string($output);
+      if ($session_status_simplexml->SID != '0000000000000000')
+      {
+        return $session_status_simplexml->SID;
+      }
+      else
+      {
+        $this->error('ERROR: Login failed with an unknown response');
+      }
+    }
+    curl_close($ch);
+  }
+  
+  // login_sid.xml
+  // Login mit allen älteren Boxen da dort der Lua Login noch nicht unterstützt wird
+    
   protected function initSID()
   {
     // read the current status
@@ -334,7 +390,7 @@ class fritzbox_api {
       curl_setopt($ch, CURLOPT_USERPWD, $this->remote_config_user . ':' . $this->remote_config_password);
     }
     $output = curl_exec($ch);
-    curl_close($ch);
+
     $session_status_simplexml = simplexml_load_string($output);
     
     // perhaps we already have a SID (i.e. when no password is set)
@@ -351,29 +407,32 @@ class fritzbox_api {
       
       // do the login
       $formfields = array(
-        'getpage'                => '../html/de/menus/menu2.html',
+        'getpage'                => '../html/login_sid.xml',
         'login:command/response' => $response,
       );
       $output = $this->doPostForm($formfields);
       
-      // finger out an error message, if given
-      preg_match('@<p class="errorMessage">(.*?)</p>@is', $output, $matches);
-      if (isset($matches[1]))
-      {
-        $this->error(str_replace('&nbsp;', ' ', $matches[1]));
-      }
       
       // finger out the SID from the response
-      preg_match('@<input type="hidden" name="sid" value="([A-Fa-f0-9]{16})" id="uiPostSid">@i', $output, $matches);
-      if (isset($matches[1]) && $matches[1] != '0000000000000000')
+      $session_status_simplexml = simplexml_load_string($output);
+      if ($session_status_simplexml->SID != '0000000000000000')
       {
-        return $matches[1];
+        return $session_status_simplexml->SID;
       }
       else
       {
-        $this->error('ERROR: Login failed with an unknown response');
+        $output = initSIDLUA();
+        if ($output != '0000000000000000')
+        {
+          return $output;
+        }
+        else
+        {
+          $this->error('ERROR: Login failed with an unknown response');
+        }
       }
     }
+    curl_close($ch);
   }
   
   
