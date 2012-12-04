@@ -354,13 +354,16 @@ class fritzbox_api {
       $challenge = $session_status_simplexml->Challenge;
       $response = $challenge . '-' . md5(mb_convert_encoding($challenge . '-' . $this->password, "UCS-2LE", "UTF-8"));
       
+      // do the login mit der Function doPostForm geht hier leider nicht
+      //$formfields = array(
+      //  'page'                => '/login_sid.lua',
+      //  'response' => $response,
+      //);
+      //$output = $this->doPostForm($formfields);
+
       // do the login
-      $formfields = array(
-        'page'                => '/login_sid.lua',
-        'response' => $response,
-      );
-      $output = $this->doPostForm($formfields);
-      
+      curl_setopt($ch, CURLOPT_POSTFIELDS, "response={$response}&page=/login_sid.lua");
+      $output = curl_exec($ch);
       
       // finger out the SID from the response
       $session_status_simplexml = simplexml_load_string($output);
